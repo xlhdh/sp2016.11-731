@@ -3,5 +3,5 @@ name:
    first: Yizhou
    last: Hu
 email: yizhouh@andrew.cmu.edu
-leaderboard: rio
+leaderboard: CLL
 languages: [eng,chi,kor]
