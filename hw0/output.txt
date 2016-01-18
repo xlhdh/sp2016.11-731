@@ -3,5 +3,5 @@ name:
    first: Yizhou
    last: Hu
 email: yizhouh@andrew.cmu.edu
-leaderboard: CLL
+leaderboard: TexasFlyer
 languages: [eng,chi,kor]
