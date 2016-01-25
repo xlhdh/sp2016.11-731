@@ -1,7 +1,7 @@
 import numpy as np
 
 BITEXT = 'data/dev-test-train.de-en'
-NUM_SENTS = 20#0000
+NUM_SENTS = 1000#00
 
 def main():
 	# eng_corp, fra_corp
@@ -41,16 +41,32 @@ def main():
 	print (len(fra_word_list),len(eng_word_list))
 
 	# INITIALIZATION 
-	t_eng_given_fra = np.ones((len(fra_word_list),len(eng_word_list)))
-	t_eng_given_fra = t_eng_given_fra/t_eng_given_fra.sum(axis=0)
+	t_eng_given_fra = np.ones((len(fra_word_list),len(eng_word_list)))/len(fra_word_list)
 	
-	# E-STEP 
-	count = np.zeros_like(t_eng_given_fra)
-	for i in range(NUM_SENTS): 
-		s_t_eng_given_fra = t_eng_given_fra[np.ix_(fra_corp[i], eng_corp[i])]
-		count[np.ix_(fra_corp[i], eng_corp[i])] = count[np.ix_(fra_corp[i], eng_corp[i])]+s_t_eng_given_fra
-	print count
+	change = False
+	for itr in range(100):
+		# E-STEP 
+		count = np.zeros_like(t_eng_given_fra)
+		change = False
+		for i in range(NUM_SENTS): 
+			s_t_eng_given_fra = t_eng_given_fra[np.ix_(fra_corp[i], eng_corp[i])]
+			s_t_eng_given_fra = s_t_eng_given_fra/s_t_eng_given_fra.sum(axis=0)
+			aln = s_t_eng_given_fra.argmax(axis=0)
+			p = s_t_eng_given_fra.sum(axis=0).prod()/(len(fra_corp[i]) ** len(eng_corp[i])))
+			#print np.not_equal(a_eng_given_fra[i],aln).any()
+			a_eng_given_fra[i] = aln
+			count[np.ix_(fra_corp[i], eng_corp[i])] = count[np.ix_(fra_corp[i], eng_corp[i])]+s_t_eng_given_fra
+		if not change:
+			print itr, itr, itr
+		# M-STEP
+		t_eng_given_fra = count/count.sum(axis=0)
+		#print t_eng_given_fra
+		print t_eng_given_fra.sum(axis=1)[0]
 
+	for i in range(300):
+		s_t_eng_given_fra = t_eng_given_fra[np.ix_(fra_corp[i], eng_corp[i])]
+		aln = s_t_eng_given_fra.argmax(axis=0)
+		print aln
 
 
 
