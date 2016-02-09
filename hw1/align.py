@@ -1,11 +1,10 @@
 import numpy as np
 from scipy.sparse import coo_matrix, dia_matrix, csr_matrix, issparse
 import cPickle as pkl
-NUM_SENTS = 10
+NUM_SENTS = 50
+BITEXT = 'data/dev-test-train.de-en'
 
 def prep():
-	BITEXT = 'data/dev-test-train.de-en'
-	
 	# eng_corp, fra_corp
 	# eng_word_dict, fra_word_dict
 	# eng_word_list, fra_word_list
@@ -53,7 +52,7 @@ def prep():
 def em(fra_len, eng_len):
 	# t_eng_given_fra, temp: count, size: fra x eng
 	# INITIALIZATION 
-	t_eng_given_fra = np.ones((fra_len,eng_len))#/eng_len
+	t_eng_given_fra = np.random.rand(fra_len,eng_len)#/eng_len
 	count_row = []
 	count_col = []
 	count_data = []
@@ -61,15 +60,11 @@ def em(fra_len, eng_len):
 		fra_corp = pkl.load(f)
 		eng_corp = pkl.load(f)
 	ppx = np.zeros((NUM_SENTS,))
-	from matplotlib import pyplot as plt
-	import matplotlib.cm as cm
+	#from matplotlib import pyplot as plt
+	#import matplotlib.cm as cm
 	
-
-	for itr in range(6):
+	for itr in range(8):
 		# E-STEP
-		print t_eng_given_fra
-		print t_eng_given_fra.sum(axis=1)
-		print t_eng_given_fra.sum(axis=0)
 		outstr = []
 		for eitr in range(NUM_SENTS):
 			s_t_e_f = t_eng_given_fra[np.ix_(fra_corp[eitr], eng_corp[eitr])]
@@ -80,12 +75,19 @@ def em(fra_len, eng_len):
 				print s_t_e_f
 				print s_t_e_f.sum(axis=1)==0
 			
-			s_norm = np.diagflat(np.reciprocal(s_t_e_f.sum(axis=1)))
-			s_t_e_f = s_norm.dot(s_t_e_f)
-			if eitr < 300:
+			#s_norm = np.diagflat(np.reciprocal(s_t_e_f.sum(axis=1)))
+			#s_t_e_f = s_norm.dot(s_t_e_f)
+			s_norm = np.diagflat(np.reciprocal(s_t_e_f.sum(axis=0)))
+			#print s_t_e_f.sum(axis=0)
+			s_t_e_f = s_t_e_f.dot(s_norm)
+			if eitr < 150:
 				aln = np.asarray(s_t_e_f).argmax(axis=1)
-				outstr.append(' '.join([str(a)+'-'+str(aln[a]) for a in range(len(aln))]))
-			ppx[eitr] = len(eng_corp[eitr])*np.log2(1.0/len(fra_corp[eitr]))+np.log2(s_t_e_f.sum(axis=0)).sum()
+				#print s_t_e_f
+				#print aln
+				outstr.append(' '.join([str(a)+'-'+str(aln[a]) for a in range(len(fra_corp[eitr]))]))
+				#exit()
+			ppx[eitr] = -len(eng_corp[eitr])*np.log2(len(fra_corp[eitr]))+np.log2(s_t_e_f.sum(axis=0)).sum()
+			#ppx[eitr] = np.log2(s_t_e_f.sum(axis=0).prod()/(np.power(len(fra_corp[eitr]),len(eng_corp[eitr]))))
 			s_coo=coo_matrix(s_t_e_f)
 			count_row.append(fra_corp[eitr][s_coo.row])
 			count_col.append(eng_corp[eitr][s_coo.col])
@@ -96,20 +98,18 @@ def em(fra_len, eng_len):
 			f.write('\n'.join(outstr))
 
 		# M-STEP
+		print "log2ppx:", -ppx.sum()#, itr+1
 		count_row = np.concatenate(count_row)
 		count_col = np.concatenate(count_col)
 		count_data = np.concatenate(count_data)
 		count = coo_matrix((count_data,(count_row,count_col)), shape=t_eng_given_fra.shape)
 		print 'Dividing...'
-		t_eng_given_fra = dia_matrix((np.reciprocal(count.sum(axis=1).flatten()),[0,]), shape=(fra_len, fra_len)).dot(count).todense()
-		print "log2ppx:", -ppx.sum()#, itr+1
-		heatmap = plt.pcolor(t_eng_given_fra, cmap = cm.Greys_r)
-		plt.gca().set_aspect('equal')
-		plt.show()
-			
+		t_save = dia_matrix((np.reciprocal(count.sum(axis=1).flatten()),[0,]), shape=(fra_len, fra_len)).dot(count).tocsr()
+		#plt.pcolor(np.array(t_eng_given_fra))
+		#plt.show()
 		with open('t_eng_given_fra'+str((itr+1))+'.npy', 'wb') as f:
-			pass
-			#np.save(f, t_eng_given_fra)
+			np.save(f, t_save)
+		t_eng_given_fra = t_save.todense()
 		count_row = []
 		count_col = []
 		count_data = []
