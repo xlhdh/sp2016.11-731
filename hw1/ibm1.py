@@ -4,7 +4,6 @@ import optparse
 import sys
 from collections import defaultdict
 import numpy as np
-OFFSET = 5
 # GLOBAL t is t[engword][fraword]
 
 def prep(bitext):
@@ -14,7 +13,6 @@ def prep(bitext):
     for ln in fl: 
       ln = ln[:-1].split('=')
       fradict[ln[0]]=ln[1].split('+')
-  print bitext[0]
   for (sf, se) in bitext: 
     # ENG side
     engcorp.append(se+["_NULL_",])
@@ -86,51 +84,6 @@ def dcd(engcorp, fracorp, engnum, franum, tef):
     opt.append(optline)
   return opt
 
-# SOURCE: MICHAEL COLLINS NOTES
-# len prevain, prevaout = OFFSET, len preva = 2*OFFSET+1
-def fb(engsent, frasent, t, count, engfirst, prevain, prevaout, preva):
-  m, n = len(frasent), len(engsent)
-  trans = np.ndarray(shape=(m, n), dtype=np.float)
-  for i in xrange(len(engsent)):
-    for j in xrange(len(frasent)):
-      trans[i][j] = t[engsent[i]][frasent[j]]
-  # Initialize alpha 
-  alpha = np.zeros(shape=(m, n), dtype=np.float)
-  alpha[0] = np.multiply(np.ones(shape=(n,), dtype=np.float), prevain[-1])
-  alpha[0][:OFFSET-1]=prevain[:OFFSET-1]
-  # FORWARD 
-  for j in xrange(1, m):
-    for s in xrange(n):
-      accum = 0
-      for sp in xrange(n):
-        accum += alpha[j-1][sp] * preva[min(max(-OFFSET,s-sp),OFFSET)+OFFSET] * trans[j][s]
-      alpha[j][s] = accum
-
-  # Initialize beta
-  beta = np.zeros(shape=(m, n), dtype=np.float)
-  beta[m-1] = beta[m-1]+1
-  #beta[0] = np.multiply(np.ones(shape=(n,), dtype=np.float), prevain[-1])
-  #beta[0][:OFFSET-1]=prevain[:OFFSET-1]
-  # BACKWARD 
-  for j in xrange(m-2, -1, -1): 
-    for s in xrange(n): 
-      accum = 0
-      for sp in xrange(n): 
-        accum += beta[j+1][sp] * preva[min(max(-OFFSET,s-sp),OFFSET)+OFFSET] * trans[j+1][s]
-      beta[j][s] = accum
-
-  Z = alpha[m-1].sum()
-  mu = np.multiply(alpha, beta)
-  p = np.add(np.log(alpha), np.log(beta))
-
-  for i in xrange(len(engsent)):
-    for j in xrange(len(frasent)):
-      count[engsent[i]][frasent[j]] += mu[i][j]
-
-
-
-
-  
 
 
 optparser = optparse.OptionParser()
@@ -155,18 +108,37 @@ for itr in range(4):
   tfe = e2f(fracorp, engcorp, tfe)
 sys.stderr.write("FRA vocab size: "+str(len(tfe))+"\n")
 
+import cPickle as pkl
+pkl.dump(tef, open("tef.pkl", 'wb'), pkl.HIGHEST_PROTOCOL)
+pkl.dump(tfe, open("tfe.pkl", 'wb'), pkl.HIGHEST_PROTOCOL)
 
 sys.stderr.write("Decoding...\n")
-todecode = 150
+todecode = num_sents
 dcdef = dcd(engcorp[:todecode], fracorp[:todecode], engnum[:todecode], franum[:todecode], tef)
 dcdfe = dcd(fracorp[:todecode], engcorp[:todecode], franum[:todecode], engnum[:todecode], tfe)
 dcdfe = [[(y, x) for x, y in l] for l in dcdfe]
 
-#alm  = [set(x).union(set(y)) for x, y in zip(dcdef, dcdfe)]
-#alm  = [set(x).intersection(set(y)) for x, y in zip(dcdef, dcdfe)]
 alm = dcdef
-
+fn = open("outef.txt", 'w')
 for i in range(len(alm)): 
-  sys.stdout.write(' '.join([str(x[0])+'-'+str(x[1]) for x in alm[i]])+'\n')
+  fn.write(' '.join([str(x[0])+'-'+str(x[1]) for x in alm[i]])+'\n')
+fn.close()
 
+alm = dcdfe
+fn = open("outfe.txt", 'w')
+for i in range(len(alm)): 
+  fn.write(' '.join([str(x[0])+'-'+str(x[1]) for x in alm[i]])+'\n')
+fn.close()
+
+alm = [set(x).intersection(set(y)) for x, y in zip(dcdef, dcdfe)]
+fn = open("outinter.txt", 'w')
+for i in range(len(alm)): 
+  fn.write(' '.join([str(x[0])+'-'+str(x[1]) for x in alm[i]])+'\n')
+fn.close()
+
+alm = [set(x).union(set(y)) for x, y in zip(dcdef, dcdfe)]
+fn = open("outuni.txt", 'w')
+for i in range(len(alm)): 
+  fn.write(' '.join([str(x[0])+'-'+str(x[1]) for x in alm[i]])+'\n')
+fn.close()
 
