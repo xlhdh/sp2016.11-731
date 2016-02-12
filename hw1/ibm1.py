@@ -108,12 +108,12 @@ for itr in range(4):
   tfe = e2f(fracorp, engcorp, tfe)
 sys.stderr.write("FRA vocab size: "+str(len(tfe))+"\n")
 
-import cPickle as pkl
-pkl.dump(tef, open("tef.pkl", 'wb'), pkl.HIGHEST_PROTOCOL)
-pkl.dump(tfe, open("tfe.pkl", 'wb'), pkl.HIGHEST_PROTOCOL)
+#import cPickle as pkl
+#pkl.dump(tef, open("tef.pkl", 'wb'), protocol=pkl.HIGHEST_PROTOCOL)
+#pkl.dump(tfe, open("tfe.pkl", 'wb'), protocol=pkl.HIGHEST_PROTOCOL)
 
 sys.stderr.write("Decoding...\n")
-todecode = num_sents
+todecode = len(engcorp)
 dcdef = dcd(engcorp[:todecode], fracorp[:todecode], engnum[:todecode], franum[:todecode], tef)
 dcdfe = dcd(fracorp[:todecode], engcorp[:todecode], franum[:todecode], engnum[:todecode], tfe)
 dcdfe = [[(y, x) for x, y in l] for l in dcdfe]

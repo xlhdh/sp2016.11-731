@@ -6,6 +6,7 @@ from collections import defaultdict
 import numpy as np
 OFFSET = 5
 THRESHOLD = 0.5
+EMITR = 20
 # GLOBAL t is t[engword][fraword]
 
 def prep(bitext):
@@ -100,33 +101,41 @@ def fb(engsent, frasent, t, tx, engfirst, prevain, prevaout, preva, prevainx, pr
   for i in xrange(m):
     for j in xrange(n):
       emit[i][j] = t[engsent[j]][frasent[i]]
+  if np.count_nonzero(emit.sum(axis=0))-np.prod(emit.shape[1]):
+    print emit
+    print engsent, frasent
   np.divide(emit, emit.sum(axis=0), emit)
 
-  # distor[cur][prev]
-  distor = np.ndarray(shape=(n, n), dtype=np.float)
-  for i in xrange(n):
-    for j in xrange(n):
-      distor[i][j]=preva[ min(max(-OFFSET,i-j),OFFSET)+OFFSET ] # i-j: cur-prev
-  np.divide(distor, distor.sum(axis=0), distor)
-
-  #TODO GO DIVIDE THE TAIL! 
-  distor_in = np.ndarray(shape=(n,), dtype=np.float) 
-  for i in xrange(n):
-    distor_in[i] = prevain[min(i,OFFSET-1)]
-  np.divide(distor_in, distor_in.sum(), distor_in)
-
-  distor_out = np.ndarray(shape=(n,), dtype=np.float) 
-  for i in xrange(n):
-    distor_out[i] = prevain[min(n-1-i,OFFSET-1)]
-  np.divide(distor_out, distor_out.sum(), distor_out)
-
   # Constructing Distortion distributions 
-  # First Line 
-  distor_in
-  # bulk lines 
-  distor
-  # Last line 
-  distor_out
+  # First Line distor_in[a] where the (first alignment - 0) is at 'a'
+  distor_in = np.zeros(shape=(n,), dtype=np.float) 
+  if n > OFFSET: 
+    distor_in[:OFFSET-1] = prevain[:OFFSET-1]
+    distor_in[OFFSET-1:] += prevain[-1]/(n-OFFSET+1)
+  else: 
+    distor_in = prevain[:n]
+  # bulk lines distor[cur][prev] where 
+  distor = np.zeros(shape=(n,n), dtype=np.float)
+  for cur in xrange(n): 
+    # range of cur-prev is [cur-(n-1), cur-0] 
+    if cur-(n-1) <= -OFFSET:  # left padding: if more than 1 tail on left
+      distor[cur][cur+OFFSET:] += preva[0]/(n-cur-OFFSET) #share the left tail 
+    if cur-0 >= OFFSET: 
+      distor[cur][:cur-OFFSET+1] = preva[-1]/(cur-OFFSET+1) #share the right tail 
+    for prev in xrange(n): 
+      if -OFFSET < cur-prev < OFFSET:
+        distor[cur][prev] = preva[cur-prev]
+  # Last line distor_out[a] where (n-1  - last alignment) is at 'a'
+  distor_out = np.zeros(shape=(n,), dtype=np.float) 
+  if n> OFFSET: 
+    distor_out[:OFFSET-1] = prevaout[:OFFSET-1]
+    distor_out[OFFSET-1:] += prevaout[-1]/(n-OFFSET+1)
+  else: 
+    distor_out = prevaout[:n]
+  
+  np.divide(distor, distor.sum(axis=1), distor)
+  np.divide(distor_in, distor_in.sum(), distor_in)
+  np.divide(distor_out, distor_out.sum(), distor_out)
 
   # psi[j][s][sp]
   psi = np.multiply(np.expand_dims(emit, axis=2), np.expand_dims(distor, axis=0))
@@ -168,11 +177,6 @@ def fb(engsent, frasent, t, tx, engfirst, prevain, prevaout, preva, prevainx, pr
   # Accumulate transition probs 
   # line 1
   for i in xrange(n): 
-    '''if n>OFFSET:
-      mu3_in[n-1] = mu3_in[n-1:].sum()
-      prevainx += mu3_in[:OFFSET]
-    else: 
-      prevainx[:n] += mu3_in'''
     prevainx[min(i,OFFSET-1)] += mu3_in[i]
 
   # line bulk 
@@ -184,9 +188,6 @@ def fb(engsent, frasent, t, tx, engfirst, prevain, prevaout, preva, prevainx, pr
   # line last 
   for i in xrange(n):
     prevaoutx[min(i,OFFSET-1)] += mu3_out[i]
-
-
-
   return mu
 
 
@@ -207,10 +208,10 @@ for itr in range(4):
 
 prevain = np.empty(OFFSET)
 prevain.fill(1.0/OFFSET)
-prevain = np.arange(1, OFFSET+1) * 1.0 / np.arange(1, OFFSET+1).sum()
+prevain = np.arange(OFFSET, 0, -1) * 1.0 / np.arange(OFFSET, 0, -1).sum()
 prevaout = np.empty(OFFSET)
 prevaout.fill(1.0/OFFSET)
-prevaout = np.arange(OFFSET) * 1.0 / np.arange(1, OFFSET+1).sum()
+prevaout = np.arange(OFFSET, 0, -1) * 1.0 / np.arange(OFFSET, 0, -1).sum()
 preva = np.empty(2*OFFSET+1)
 preva.fill(1.0/(2*OFFSET+1))
 preva[:OFFSET] = np.arange(1, OFFSET+1) * 1.0 
@@ -218,7 +219,7 @@ preva[OFFSET:] = np.arange(OFFSET+1, 0, -1) * 1.0
 preva = preva / preva.sum()
 
 sys.stderr.write("EMing...\n")
-for itr in xrange(5): 
+for itr in xrange(ENITR): 
   sys.stderr.write("itr: "+str(itr)+"\n")
   #sys.stderr.write(str(tef)+"\n")
   prevainx = np.zeros(shape=(OFFSET,),dtype=float)
@@ -236,16 +237,16 @@ for itr in xrange(5):
   for e in tefx:
     for f in tefx[e]: 
       tef[e][f] = tefx[e][f]/txf[f]
+      if txf[f] == 0.0:
+        sys.stderr.write(e+"-"+f+"\n")
   np.divide(prevainx,prevainx.sum(), prevain)
   np.divide(prevaoutx,prevaoutx.sum(), prevaout)
   np.divide(prevax,prevax.sum(), preva)
 
   #sys.stderr.write(str(tef)+"\n")
-  sys.stderr.write(str(preva)+"\n")
-  sys.stderr.write(str(prevain)+"\n")
-  sys.stderr.write(str(prevaout)+"\n")
-
-
+  sys.stderr.write(str(preva)+str(preva.sum())+"\n")
+  sys.stderr.write(str(prevain)+str(prevain.sum())+"\n")
+  sys.stderr.write(str(prevaout)+str(prevaout.sum())+"\n")
 sys.stderr.write("ENG vocab size: "+str(len(tef))+"\n")
 
 
