@@ -98,12 +98,10 @@ engcorp, fracorp, engnum, franum = prep(bitext)
 
 sys.stderr.write("EMing...\n")
 tef = defaultdict(lambda: defaultdict(lambda: float(1)))
-for itr in range(4): 
   sys.stderr.write("itr: "+str(itr)+"\n")
   tef = e2f(engcorp, fracorp, tef)
 sys.stderr.write("ENG vocab size: "+str(len(tef))+"\n")
 tfe = defaultdict(lambda: defaultdict(lambda: float(1)))
-for itr in range(4): 
   sys.stderr.write("itr: "+str(itr)+"\n")
   tfe = e2f(fracorp, engcorp, tfe)
 sys.stderr.write("FRA vocab size: "+str(len(tfe))+"\n")

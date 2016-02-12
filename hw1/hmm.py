@@ -132,7 +132,6 @@ def fb(engsent, frasent, t, tx, engfirst, prevain, prevaout, preva, prevainx, pr
     distor_out[OFFSET-1:] += prevaout[-1]/(n-OFFSET+1)
   else: 
     distor_out = prevaout[:n]
-  
   np.divide(distor, distor.sum(axis=1), distor)
   np.divide(distor_in, distor_in.sum(), distor_in)
   np.divide(distor_out, distor_out.sum(), distor_out)
@@ -207,13 +206,10 @@ for itr in range(4):
   tef = e2f(engcorp, fracorp, tef)
 
 prevain = np.empty(OFFSET)
-prevain.fill(1.0/OFFSET)
 prevain = np.arange(OFFSET, 0, -1) * 1.0 / np.arange(OFFSET, 0, -1).sum()
 prevaout = np.empty(OFFSET)
-prevaout.fill(1.0/OFFSET)
 prevaout = np.arange(OFFSET, 0, -1) * 1.0 / np.arange(OFFSET, 0, -1).sum()
 preva = np.empty(2*OFFSET+1)
-preva.fill(1.0/(2*OFFSET+1))
 preva[:OFFSET] = np.arange(1, OFFSET+1) * 1.0 
 preva[OFFSET:] = np.arange(OFFSET+1, 0, -1) * 1.0
 preva = preva / preva.sum()
