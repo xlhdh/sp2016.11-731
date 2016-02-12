@@ -219,7 +219,7 @@ preva[OFFSET:] = np.arange(OFFSET+1, 0, -1) * 1.0
 preva = preva / preva.sum()
 
 sys.stderr.write("EMing...\n")
-for itr in xrange(ENITR): 
+for itr in xrange(EMITR): 
   sys.stderr.write("itr: "+str(itr)+"\n")
   #sys.stderr.write(str(tef)+"\n")
   prevainx = np.zeros(shape=(OFFSET,),dtype=float)
