@@ -23,7 +23,6 @@ def prep(bitext):
     #engnum.append(range(len(se))+[None,])
     engnum.append(range(len(se)))
 
-
     # FRA side 
     fline = []
     fnum = []     
@@ -55,8 +54,38 @@ def prep(bitext):
     #franum.append(fnum+[None,])
     franum.append(fnum)
 
+  from collections import Counter
+  engwords = Counter()
+  for se in engcorp: 
+    engwords.update(se)
+  eng_w2c = {}
+  #eng_c2w = []
+  c=0
+  for e, ct in engwords.most_common(len(engwords)): 
+    eng_w2c[e]=c
+    #eng_c2w[c]=e
+    c+=1
+  frawords = Counter()
+  for sf in fracorp: 
+    frawords.update(sf)
+  fra_w2c = {}
+  #frac2w = []
+  c=0
+  for f, ct in frawords.most_common(len(frawords)):
+    fra_w2c[f]=c
+    #fra_c2w[c]=f
+    c+=1
+
+  for i in xrange(len(engcorp)): 
+    engcorp[i] = [eng_w2c[e] for e in engcorp[i]]
+  for i in xrange(len(fracorp)): 
+    fracorp[i] = [fra_w2c[f] for f in fracorp[i]]
+
+  engvocab = len(engwords)
+  fravocab = len(frawords)
+
   assert len(engcorp)== len(fracorp)== len(engnum)== len(franum)
-  return engcorp, fracorp, engnum, franum 
+  return engcorp, fracorp, engnum, franum, engvocab, fravocab
 
 def e2f(engcorp, fracorp, t):
   count = defaultdict(lambda: defaultdict(float))
@@ -98,9 +127,9 @@ def fb(engsent, frasent, t, tx, engfirst, prevain, prevaout, preva, prevainx, pr
   m, n = len(frasent), len(engsent)
   # emit[fra][eng] emit fra given eng
   emit = np.ndarray(shape=(m, n), dtype=np.float)
-  for i in xrange(m):
-    for j in xrange(n):
-      emit[i][j] = t[engsent[j]][frasent[i]]
+  for j in xrange(m):
+    for i in xrange(n):
+      emit[j][i] = t[(engsent[i],frasent[j])]
   if np.count_nonzero(emit.sum(axis=0))-np.prod(emit.shape[1]):
     print emit
     print engsent, frasent
@@ -171,7 +200,7 @@ def fb(engsent, frasent, t, tx, engfirst, prevain, prevaout, preva, prevainx, pr
   # Accumulate translation probs 
   for j in xrange(m):
     for i in xrange(n):
-      tx[engsent[i]][frasent[j]] += mu[j][i]
+      tx[(engsent[i],frasent[j])] += mu[j][i]
 
   # Accumulate transition probs 
   # line 1
@@ -198,7 +227,9 @@ optparser.add_option("-n", "--num_sentences", dest="num_sents", default=sys.maxi
 sys.stderr.write("Training with HMM1...\n")
 bitext = [[sentence.strip().lower().split() for sentence in pair.split(' ||| ')] for pair in open(opts.bitext)][:opts.num_sents]
 sys.stderr.write("Preparing...\n")
-engcorp, fracorp, engnum, franum = prep(bitext)
+engcorp, fracorp, engnum, franum, engvocab, fravocab = prep(bitext)
+sys.stderr.write("ENG vocab size: "+str(engvocab)+"\n")
+sys.stderr.write("FRA vocab size: "+str(fravocab)+"\n")
 
 tef = defaultdict(lambda: defaultdict(lambda: float(1)))
 for itr in range(4): 
@@ -214,20 +245,34 @@ preva[:OFFSET] = np.arange(1, OFFSET+1) * 1.0
 preva[OFFSET:] = np.arange(OFFSET+1, 0, -1) * 1.0
 preva = preva / preva.sum()
 
+from scipy.sparse import dok_matrix
+t = dok_matrix((engvocab,fravocab),dtype=float)
+for e in tef: 
+  for f in tef[e]: 
+    t[(e,f)] = tef[e][f]
+tef = t
+
 sys.stderr.write("EMing...\n")
 for itr in xrange(EMITR): 
   sys.stderr.write("itr: "+str(itr)+"\n")
-  #sys.stderr.write(str(tef)+"\n")
   prevainx = np.zeros(shape=(OFFSET,),dtype=float)
   prevaoutx = np.zeros(shape=(OFFSET,),dtype=float)
   prevax = np.zeros(shape=(2*OFFSET+1,),dtype=float)
-  tefx = defaultdict(lambda: defaultdict(lambda: float(0)))
+  tefx = dok_matrix((engvocab,fravocab),dtype=float)
   poster = []
   for x in xrange(len(engcorp)): 
     p = fb(engcorp[x], fracorp[x], tef, tefx, True, prevain, prevaout, preva, prevainx, prevaoutx, prevax)
     poster.append(p)
-  txf = defaultdict(float)
-  for e in tefx:
+  #txf = defaultdict(float)
+
+  tefx = tefx.tocoo().tocsc()
+  print type(tefx), type(tef)
+  #print tefx.sum(axis=0)
+  #print tefx.sum(axis=1)
+  print type(tefx.sum(axis=0))
+  tef = dok_matrix(np.divide(tefx, tefx.sum(axis=0)))
+
+  '''for e in tefx:
     for f in tefx[e]: 
       txf[f]+= tefx[e][f]
   for e in tefx:
@@ -235,6 +280,8 @@ for itr in xrange(EMITR):
       tef[e][f] = tefx[e][f]/txf[f]
       if txf[f] == 0.0:
         sys.stderr.write(e+"-"+f+"\n")
+      if f == "ursprüngliche":
+        sys.stderr.write(e+"-"+f+","+str(tef[e][f])+"\n")'''
   np.divide(prevainx,prevainx.sum(), prevain)
   np.divide(prevaoutx,prevaoutx.sum(), prevaout)
   np.divide(prevax,prevax.sum(), preva)
@@ -243,7 +290,6 @@ for itr in xrange(EMITR):
   sys.stderr.write(str(preva)+str(preva.sum())+"\n")
   sys.stderr.write(str(prevain)+str(prevain.sum())+"\n")
   sys.stderr.write(str(prevaout)+str(prevaout.sum())+"\n")
-sys.stderr.write("ENG vocab size: "+str(len(tef))+"\n")
 
 
 sys.stderr.write("Decoding...\n")
