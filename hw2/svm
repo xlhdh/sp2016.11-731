@@ -147,8 +147,9 @@ def main():
     #1/0
 
     # ['p1','p2','r1','r2','r3','sp1','sp2','sr1','sr2','sr3','gscos0','gseuc0','cp4','cp5','cp6','cp7','cr4','cr5','cr6','cr7','lm1','lm2','lme']
-    s = ['p1','p2','r1','r2','r3','sp1','sp2','sr1','sr2','sr3','gseuc0','cp4','cp5','cp6','cp7','cr5','cr6','cr7','lm1','lm2']
-    settings = [['cr4','gscos0','lme',u] for u in s]
+    s = ['p1','p2','r2','r3','sp1','sp2','sr1','sr2','sr3','gseuc0','cp4','cp5','cp6','cp7','cr5','cr6','cr7','lm1','lm2']
+    settings = [['cr4','gscos0','lme','r1',u] for u in s]
+    settings = [['cr4','gscos0','lme','r1'],]
 
     for fts in settings: 
         forward = np.zeros(shape=(opts.num_sentences, 1))
@@ -161,24 +162,26 @@ def main():
         forward = forward[:,1:]
         backward = backward[:,1:]
 
-        ttsplit = opts.num_sentences/5
-        ttsplit = 0
+        ttsplit = 26208
+        #ttsplit = opts.num_sentences
 
-        datas_ho = forward[:ttsplit]
+        datas_ho = forward[ttsplit:]
         datas_ho = np.ma.masked_invalid(datas_ho)
         datas_ho.fill_value = 1.0
         datas_ho = datas_ho.filled()
+        print forward[:ttsplit,:].shape, backward[:ttsplit,:].shape
 
-        datas = np.vstack((forward[ttsplit:], backward[ttsplit:]))
+        datas = np.vstack((forward[:ttsplit,:], backward[:ttsplit,:]))
         #datas = forward[ttsplit:]
         datas = np.ma.masked_invalid(datas)
         datas.fill_value = 1.0
         datas = datas.filled()
         
         gold = golds()[:opts.num_sentences]
-        targets = gold[ttsplit:]
-        targets_ho = gold[:ttsplit]
+        targets = gold[:ttsplit]
+        targets_ho = gold[ttsplit:]
         targets = np.hstack((targets, -targets))
+        print datas.shape, targets.shape
         
         '''clf = svm.SVC(kernel='rbf', C=1, verbose=True)
         clf.fit(datas, targets==1)
@@ -192,61 +195,29 @@ def main():
         '''clf = svm.SVC(kernel='poly', degree=2)
         scores = cross_validation.cross_val_score(clf, datas, targets, cv=5)
         print 'poly', '\t', scores.mean(), '\t', scores.std()'''
+        
+        if opts.num_sentences > 50000: 
+            logreg = linear_model.LogisticRegression(C=7)
+            logreg.fit(datas, targets) 
+            print 'lr, trainerr', logreg.score(datas, targets)
 
-        clf = svm.LinearSVC(C=1)
+            lbl = logreg.predict(np.vstack((datas[:ttsplit],datas_ho)) )
+
+            with open('output.txt','w') as fn: 
+                fn.write('\n'.join([str(u) for u in lbl]))
+            return 
+
+        '''clf = svm.LinearSVC(C=1)
         scores = cross_validation.cross_val_score(clf, datas, targets, cv=5)
-        print 'linear', '\t', scores.mean(), '\t', scores.std(), '\t', scores.min()
-        logreg = linear_model.LogisticRegression(C=1e5)
+        print 'linear', '\t', scores.mean(), '\t', scores.std(), '\t', scores.min()'''
+
+        logreg = linear_model.LogisticRegression(C=7)
         scores = cross_validation.cross_val_score(logreg, datas, targets, cv=5)
         print 'lr', '\t', scores.mean(), '\t', scores.std(), '\t', scores.min()
+
         '''gnb = GaussianNB()
         scores = cross_validation.cross_val_score(gnb, datas, targets, cv=5)
         print 'nb', '\t', scores.mean(), '\t', scores.std()'''
-    1/0
-
-    from sklearn.grid_search import GridSearchCV
-    clf.fit(datas, targets)
-    print 'train', clf.score(datas, targets)
-    print 'test', clf.score(datas_ho, targets_ho)
-
-    '''clf = svm.LinearSVC(C=1, verbose=True)
-    clf.fit(datas, targets)
-    print 'train', clf.score(datas, targets)
-    print 'test', clf.score(datas_ho, targets_ho)'''
-    from matplotlib.colors import Normalize
-    class MidpointNormalize(Normalize):
-        def __init__(self, vmin=None, vmax=None, midpoint=None, clip=False):
-            self.midpoint = midpoint
-            Normalize.__init__(self, vmin, vmax, clip)
-
-        def __call__(self, value, clip=None):
-            x, y = [self.vmin, self.midpoint, self.vmax], [0, 0.5, 1]
-            return np.ma.masked_array(np.interp(value, x, y))
-
-    C_range = np.logspace(-4, 8, 13)
-    gamma_range = np.logspace(-9, 3, 13)
-    param_grid = dict(gamma=gamma_range, C=C_range)
-    cv = cross_validation.StratifiedShuffleSplit(targets, n_iter=4, test_size=0.25, random_state=42)
-    grid = GridSearchCV(svm.SVC(verbose=True, max_iter=5000, decision_function_shape='ovr'), param_grid=param_grid, cv=cv, verbose=2)
-    grid.fit(datas, targets)
-    print("The best parameters are %s with a score of %0.2f" % (grid.best_params_, grid.best_score_))
-    print grid.grid_scores_
-
-    import matplotlib.pyplot as plt
-    scores = [x[1] for x in grid.grid_scores_]
-    scores = np.array(scores).reshape(len(C_range), len(gamma_range))
-    plt.figure(figsize=(8, 6))
-    plt.subplots_adjust(left=.2, right=0.95, bottom=0.15, top=0.95)
-    plt.imshow(scores, interpolation='nearest', cmap=plt.cm.hot, norm=MidpointNormalize(vmin=0.2, midpoint=0.92))
-    plt.xlabel('gamma')
-    plt.ylabel('C')
-    plt.colorbar()
-    plt.xticks(np.arange(len(gamma_range)), gamma_range, rotation=45)
-    plt.yticks(np.arange(len(C_range)), C_range)
-    plt.title('Validation accuracy')
-    plt.show()
-
-
 
 
 # convention to allow import of this file as a module
