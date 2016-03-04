@@ -130,7 +130,7 @@ def main():
     #1/0
 
     # ['p1','p2','r1','r2','r3','sp1','sp2','sr1','sr2','sr3','gscos0','gseuc0','cp4','cp5','cp6','cp7','cr4','cr5','cr6','cr7']
-    s = ['p1','p2','r1','r2','r3','sp1','sp2','sr1','sr2','sr3','gscos0','gseuc0','cp4','cp5','cp6','cp7','cr4','cr5','cr6','cr7']
+    s = ['p1','p2','r1','r2','r3','sp1','sp2','sr1','sr2','sr3','gscos0','gseuc0','cp1','cp2','cp3','cp4','cp5','cp6','cp7','cr1','cr2','cr3','cr4','cr5','cr6','cr7']
     settings = [[u,] for u in s]
 
     for fts in settings: 
@@ -171,18 +171,20 @@ def main():
         '''clf = svm.SVC(kernel='rbf', C=10e10, gamma=10e-6, verbose=1)
         scores = cross_validation.cross_val_score(clf, datas, targets, cv=5)
         print scores.mean(), scores.std()'''
-        clf = svm.SVC(kernel='poly', degree=2)
+
+        '''clf = svm.SVC(kernel='poly', degree=2)
         scores = cross_validation.cross_val_score(clf, datas, targets, cv=5)
-        print 'poly'+'\t'+scores.mean()+'\t'+scores.std()
+        print 'poly'+'\t'+scores.mean()+'\t'+scores.std()'''
+
         clf = svm.LinearSVC(C=1)
         scores = cross_validation.cross_val_score(clf, datas, targets, cv=5)
         print 'linear'+'\t'+scores.mean()+'\t'+scores.std()
         logreg = linear_model.LogisticRegression(C=1e5)
         scores = cross_validation.cross_val_score(logreg, datas, targets, cv=5)
         print 'lr'+'\t'+scores.mean()+'\t'+scores.std()
-        gnb = GaussianNB()
+        '''gnb = GaussianNB()
         scores = cross_validation.cross_val_score(gnb, datas, targets, cv=5)
-        print 'nb'+'\t'+scores.mean()+'\t'+scores.std()
+        print 'nb'+'\t'+scores.mean()+'\t'+scores.std()'''
     1/0
 
     from sklearn.grid_search import GridSearchCV
