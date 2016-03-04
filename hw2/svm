@@ -1,0 +1,235 @@
+#!/usr/bin/env python
+# -*- coding: utf-8“ -*-
+
+import argparse # optparse is deprecated
+from itertools import islice # slicing for iterators
+from nltk.util import ngrams
+from nltk.tokenize import RegexpTokenizer
+from nltk.stem.snowball import SnowballStemmer
+import numpy as np
+import string
+from sklearn import cross_validation, svm, linear_model
+from sklearn.naive_bayes import GaussianNB
+ 
+# DRY
+def precision(x, ref, n, stem=False, r=False):
+    if stem: 
+        stemmer = SnowballStemmer("english")
+        x = [stemmer.stem(u) for u in x]
+        ref = [stemmer.stem(u) for u in ref]
+    if r: 
+        x, ref = ref, x
+    x = set(ngrams(x, n))
+    ref = set(ngrams(ref, n))
+    if len(x): 
+        return 1.0*sum([1 for i in x if i in ref])/len(x)
+    else: 
+        return 0.0
+
+def recall(ref, x, n, stem=False):
+    x = set(ngrams(x, n))
+    ref = set(ngrams(ref, n))
+    if len(x): 
+        return 1.0*sum([1 for i in x if i in ref])/len(x)
+    else: 
+        return 0.0
+
+def main():
+    parser = argparse.ArgumentParser(description='Evaluate translation hypotheses.')
+    # PEP8: use ' and not " for strings
+    parser.add_argument('-i', '--input', default='data/train-test.hyp1-hyp2-ref',
+            help='input file (default data/train-test.hyp1-hyp2-ref)')
+    parser.add_argument('-g', '--gold', default='data/train.gold',
+            help='gold input file (default data/train.gold)')
+    parser.add_argument('-f', '--feat', default='feat/',
+            help='feature folder (default feat/)')
+    parser.add_argument('-n', '--num_sentences', default=26208, type=int,
+            help='Number of hypothesis pairs to evaluate')
+    # note that if x == [1, 2, 3], then x[:None] == x[:] == x (copy); no need for sys.maxint
+    opts = parser.parse_args()
+ 
+    # we create a generator and avoid loading all sentences into a list
+    def sentences():
+        toker = RegexpTokenizer('[^​​“”…\\\\%s\s]+|[​​“”…\\\\%s]'.decode('utf8') % (string.punctuation,string.punctuation))
+        with open(opts.input) as f:
+            for pair in f:
+                yield [toker.tokenize(sentence.decode('utf8').lower()) for sentence in pair.split(' ||| ')]
+    def csentences():
+        toker = RegexpTokenizer('[^​​“”…\\\\%s\s]+|[​​“”…\\\\%s]'.decode('utf8') % (string.punctuation,string.punctuation))
+        with open(opts.input) as f:
+            for pair in f:
+                yield [[u for u in sentence.decode('utf8').lower()] for sentence in pair.split(' ||| ')]
+    def golds():
+        with open(opts.gold) as f: 
+            return np.array([int(i.strip()) for i in f])
+ 
+    # note: the -n option does not work in the original code
+    def writefeats(name, n, stem=False, r=False): 
+        outarray = []
+        for h1, h2, ref in islice(sentences(), opts.num_sentences):
+            outarray.append( (precision(h1, ref, n, stem), precision(h2, ref, n, stem)) )
+        np.save(opts.feat+name+str(n), np.array(outarray))
+
+    def cwritefeats(name, n, stem=False, r=False): 
+        outarray = []
+        for h1, h2, ref in islice(csentences(), opts.num_sentences):
+            outarray.append( (precision(h1, ref, n, stem), precision(h2, ref, n, stem)) )
+        np.save(opts.feat+name+str(n), np.array(outarray))
+
+    def glovefeats(name, n): 
+        glovewords = 'glove300dwords.txt' 
+        glovevecs = 'glove300dvecs.txt' 
+        glovevecs = np.loadtxt(glovevecs)
+        gloveavg = glovevecs.mean(axis=0)
+
+        gloveindex, i = {}, 0
+        for ln in open(glovewords,'r'): 
+            gloveindex[ln.strip()] = i
+            i+=1
+
+        def s_to_m(sent): 
+            sentidx = np.array([gloveindex[x] for x in sent if x in gloveindex])
+            if sentidx.shape[0]: 
+                sentmtx = glovevecs[sentidx]
+                sent = sentmtx.transpose().dot(sentmtx)
+            else: 
+                sent = np.outer(gloveavg, gloveavg)
+            return sent.flatten()
+
+        from scipy.spatial.distance import cosine, euclidean
+        from sklearn import preprocessing
+        outarray0 = []
+        outarray1 = []
+        for h1, h2, ref in islice(sentences(), opts.num_sentences):
+            h1, h2, ref = s_to_m(h1),s_to_m(h2), s_to_m(ref)
+            outarray0.append( (cosine(h1,ref), cosine(h2,ref)) )
+            outarray1.append( (euclidean(h1,ref), euclidean(h2,ref)) )
+        np.save(opts.feat+name+'cos'+str(n), np.array(outarray0))
+        outarray1 = preprocessing.scale(outarray1)
+        np.save(opts.feat+name+'euc'+str(n), np.array(outarray1))
+
+    #writefeats('p', 1)
+    #writefeats('p', 2)
+    #writefeats('r', 1, r=True)
+    #writefeats('r', 2, r=True)
+    #writefeats('r', 3, r=True)
+    #cwritefeats('cp', 4)
+    #cwritefeats('cp', 5)
+    #cwritefeats('cp', 6)
+    #cwritefeats('cp', 7)
+    #cwritefeats('cr', 4, r=True)
+    #cwritefeats('cr', 5, r=True)
+    #cwritefeats('cr', 6, r=True)
+    #cwritefeats('cr', 7, r=True)
+    #writefeats('sp', 1, stem=True)
+    #writefeats('sp', 2, stem=True)
+    #writefeats('sr', 1, r=True, stem=True)
+    #writefeats('sr', 2, r=True, stem=True)
+    #writefeats('sr', 3, r=True, stem=True)
+    #glovefeats('gs', 0)
+    #1/0
+
+    # ['p1','p2','r1','r2','r3','sp1','sp2','sr1','sr2','sr3','gscos0','gseuc0','cp4','cp5','cp6','cp7','cr4','cr5','cr6','cr7']
+    s = ['p1','p2','r1','r2','r3','sp1','sp2','sr1','sr2','sr3','gscos0','gseuc0','cp4','cp5','cp6','cp7','cr4','cr5','cr6','cr7']
+    settings = [[u,] for u in s]
+
+    for fts in settings: 
+        forward = np.zeros(shape=(opts.num_sentences, 1))
+        backward = np.zeros(shape=(opts.num_sentences, 1))
+        print fts
+        for filename in fts: 
+            arr = np.load(opts.feat+filename+'.npy')[:opts.num_sentences,:]
+            forward = np.hstack((forward, arr))
+            backward = np.hstack((backward, np.fliplr(arr)))
+        forward = forward[:,1:]
+        backward = backward[:,1:]
+
+        ttsplit = opts.num_sentences/5
+        ttsplit = 0
+
+        datas_ho = forward[:ttsplit]
+        datas_ho = np.ma.masked_invalid(datas_ho)
+        datas_ho.fill_value = 1.0
+        datas_ho = datas_ho.filled()
+
+        datas = np.vstack((forward[ttsplit:], backward[ttsplit:]))
+        #datas = forward[ttsplit:]
+        datas = np.ma.masked_invalid(datas)
+        datas.fill_value = 1.0
+        datas = datas.filled()
+        
+        gold = golds()[:opts.num_sentences]
+        targets = gold[ttsplit:]
+        targets_ho = gold[:ttsplit]
+        targets = np.hstack((targets, -targets))
+        
+        '''clf = svm.SVC(kernel='rbf', C=1, verbose=True)
+        clf.fit(datas, targets==1)
+        print 'train', clf.score(datas, targets==1)
+        print 'test', clf.score(datas_ho, targets_ho==1)'''
+
+        '''clf = svm.SVC(kernel='rbf', C=10e10, gamma=10e-6, verbose=1)
+        scores = cross_validation.cross_val_score(clf, datas, targets, cv=5)
+        print scores.mean(), scores.std()'''
+        clf = svm.SVC(kernel='poly', degree=2)
+        scores = cross_validation.cross_val_score(clf, datas, targets, cv=5)
+        print 'poly'+'\t'+scores.mean()+'\t'+scores.std()
+        clf = svm.LinearSVC(C=1)
+        scores = cross_validation.cross_val_score(clf, datas, targets, cv=5)
+        print 'linear'+'\t'+scores.mean()+'\t'+scores.std()
+        logreg = linear_model.LogisticRegression(C=1e5)
+        scores = cross_validation.cross_val_score(logreg, datas, targets, cv=5)
+        print 'lr'+'\t'+scores.mean()+'\t'+scores.std()
+        gnb = GaussianNB()
+        scores = cross_validation.cross_val_score(gnb, datas, targets, cv=5)
+        print 'nb'+'\t'+scores.mean()+'\t'+scores.std()
+    1/0
+
+    from sklearn.grid_search import GridSearchCV
+    clf.fit(datas, targets)
+    print 'train', clf.score(datas, targets)
+    print 'test', clf.score(datas_ho, targets_ho)
+
+    '''clf = svm.LinearSVC(C=1, verbose=True)
+    clf.fit(datas, targets)
+    print 'train', clf.score(datas, targets)
+    print 'test', clf.score(datas_ho, targets_ho)'''
+    from matplotlib.colors import Normalize
+    class MidpointNormalize(Normalize):
+        def __init__(self, vmin=None, vmax=None, midpoint=None, clip=False):
+            self.midpoint = midpoint
+            Normalize.__init__(self, vmin, vmax, clip)
+
+        def __call__(self, value, clip=None):
+            x, y = [self.vmin, self.midpoint, self.vmax], [0, 0.5, 1]
+            return np.ma.masked_array(np.interp(value, x, y))
+
+    C_range = np.logspace(-4, 8, 13)
+    gamma_range = np.logspace(-9, 3, 13)
+    param_grid = dict(gamma=gamma_range, C=C_range)
+    cv = cross_validation.StratifiedShuffleSplit(targets, n_iter=4, test_size=0.25, random_state=42)
+    grid = GridSearchCV(svm.SVC(verbose=True, max_iter=5000, decision_function_shape='ovr'), param_grid=param_grid, cv=cv, verbose=2)
+    grid.fit(datas, targets)
+    print("The best parameters are %s with a score of %0.2f" % (grid.best_params_, grid.best_score_))
+    print grid.grid_scores_
+
+    import matplotlib.pyplot as plt
+    scores = [x[1] for x in grid.grid_scores_]
+    scores = np.array(scores).reshape(len(C_range), len(gamma_range))
+    plt.figure(figsize=(8, 6))
+    plt.subplots_adjust(left=.2, right=0.95, bottom=0.15, top=0.95)
+    plt.imshow(scores, interpolation='nearest', cmap=plt.cm.hot, norm=MidpointNormalize(vmin=0.2, midpoint=0.92))
+    plt.xlabel('gamma')
+    plt.ylabel('C')
+    plt.colorbar()
+    plt.xticks(np.arange(len(gamma_range)), gamma_range, rotation=45)
+    plt.yticks(np.arange(len(C_range)), C_range)
+    plt.title('Validation accuracy')
+    plt.show()
+
+
+
+
+# convention to allow import of this file as a module
+if __name__ == '__main__':
+    main()
