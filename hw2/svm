@@ -146,9 +146,9 @@ def main():
 
     #1/0
 
-    # ['p1','p2','r1','r2','r3','sp1','sp2','sr1','sr2','sr3','gscos0','gseuc0','cp4','cp5','cp6','cp7','cr4','cr5','cr6','cr7']
-    s = ['lm1','lm2','lm3']
-    settings = [[u,] for u in s]
+    # ['p1','p2','r1','r2','r3','sp1','sp2','sr1','sr2','sr3','gscos0','gseuc0','cp4','cp5','cp6','cp7','cr4','cr5','cr6','cr7','lm1','lm2','lm3']
+    s = ['p1','p2','r1','r2','r3','sp1','sp2','sr1','sr2','sr3','gscos0','gseuc0','cp4','cp5','cp6','cp7','cr5','cr6','cr7','lm1','lm2']
+    settings = [['cr4',u] for u in s]
 
     for fts in settings: 
         forward = np.zeros(shape=(opts.num_sentences, 1))
