@@ -16,8 +16,8 @@ The software used to make/query language models is https://kheafield.com/code/ke
 
 #### Second, I used a "greedy search" to find which features should be included in my classifier. 
 I started with only 1 feature, pick the one with the highest cross-validation score (and low variance), and then add 1 more feature at a time. 
-I ended up picking Chracter-level recall 4-gram, sentence distance cosine, language model Europarl, ???, in that order. It's easy to see that they are features will few correlations with each other. 
-In terms of classifiers, I tried SVM with different kernals, logistic regression, naive Bayes, etc. They are all part of the greedy search process - I search for the right classifier and the feature set at the same time. 
+I ended up picking Chracter-level recall 4-gram, sentence distance cosine, language model Europarl, and recall 1-gram, in that order. It's easy to see that they are features will few correlations with each other. 
+In terms of classifiers, I tried SVM with different kernals, logistic regression, naive Bayes, etc. They are all part of the greedy search process - I search for the right classifier and the feature set at the same time. I ended up with a logistic regression with C=7. 
 
 #### Others 
 I flipped the training data to form a second copy. At first, I thought there is no point to train the classifier to prefer h1 over h2. I briefly deviated to removing this constraint thinking human may be biased on the position a sentence appear on the screen but soon gave up as I saw no improvement training on only one copy of the data. 
