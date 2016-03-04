@@ -67,13 +67,13 @@ def main():
     def writefeats(name, n, stem=False, r=False): 
         outarray = []
         for h1, h2, ref in islice(sentences(), opts.num_sentences):
-            outarray.append( (precision(h1, ref, n, stem), precision(h2, ref, n, stem)) )
+            outarray.append( (precision(h1, ref, n, stem, r), precision(h2, ref, n, stem, r)) )
         np.save(opts.feat+name+str(n), np.array(outarray))
 
     def cwritefeats(name, n, stem=False, r=False): 
         outarray = []
         for h1, h2, ref in islice(csentences(), opts.num_sentences):
-            outarray.append( (precision(h1, ref, n, stem), precision(h2, ref, n, stem)) )
+            outarray.append( (precision(h1, ref, n, stem, r), precision(h2, ref, n, stem, r)) )
         np.save(opts.feat+name+str(n), np.array(outarray))
 
     def glovefeats(name, n): 
@@ -113,10 +113,13 @@ def main():
     #writefeats('r', 1, r=True)
     #writefeats('r', 2, r=True)
     #writefeats('r', 3, r=True)
-    #cwritefeats('cp', 4)
-    #cwritefeats('cp', 5)
-    #cwritefeats('cp', 6)
+    #cwritefeats('cp', 1)
+    #cwritefeats('cp', 2)
+    #cwritefeats('cp', 3)
     #cwritefeats('cp', 7)
+    #cwritefeats('cr', 1, r=True)
+    #cwritefeats('cr', 2, r=True)
+    #cwritefeats('cr', 3, r=True)
     #cwritefeats('cr', 4, r=True)
     #cwritefeats('cr', 5, r=True)
     #cwritefeats('cr', 6, r=True)
@@ -174,17 +177,17 @@ def main():
 
         '''clf = svm.SVC(kernel='poly', degree=2)
         scores = cross_validation.cross_val_score(clf, datas, targets, cv=5)
-        print 'poly'+'\t'+scores.mean()+'\t'+scores.std()'''
+        print 'poly', '\t', scores.mean(), '\t', scores.std()'''
 
         clf = svm.LinearSVC(C=1)
         scores = cross_validation.cross_val_score(clf, datas, targets, cv=5)
-        print 'linear'+'\t'+scores.mean()+'\t'+scores.std()
+        print 'linear', '\t', scores.mean(), '\t', scores.std()
         logreg = linear_model.LogisticRegression(C=1e5)
         scores = cross_validation.cross_val_score(logreg, datas, targets, cv=5)
-        print 'lr'+'\t'+scores.mean()+'\t'+scores.std()
+        print 'lr', '\t', scores.mean(), '\t', scores.std()
         '''gnb = GaussianNB()
         scores = cross_validation.cross_val_score(gnb, datas, targets, cv=5)
-        print 'nb'+'\t'+scores.mean()+'\t'+scores.std()'''
+        print 'nb', '\t', scores.mean(), '\t', scores.std()'''
     1/0
 
     from sklearn.grid_search import GridSearchCV
