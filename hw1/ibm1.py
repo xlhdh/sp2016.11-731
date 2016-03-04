@@ -89,6 +89,7 @@ def dcd(engcorp, fracorp, engnum, franum, tef):
 optparser = optparse.OptionParser()
 optparser.add_option("-b", "--bitext", dest="bitext", default="data/dev-test-train.de-en", help="Parallel corpus (default data/dev-test-train.de-en)")
 optparser.add_option("-n", "--num_sentences", dest="num_sents", default=sys.maxint, type="int", help="Number of sentences to use for training and alignment")
+optparser.add_option("-e", "--EM", dest="EMITR", default=5, type="int", help="Number of EM iterations")
 (opts, _) = optparser.parse_args()
 
 sys.stderr.write("Training with IBM1...\n")
@@ -98,10 +99,12 @@ engcorp, fracorp, engnum, franum = prep(bitext)
 
 sys.stderr.write("EMing...\n")
 tef = defaultdict(lambda: defaultdict(lambda: float(1)))
+for itr in range(opts.EMITR): 
   sys.stderr.write("itr: "+str(itr)+"\n")
   tef = e2f(engcorp, fracorp, tef)
 sys.stderr.write("ENG vocab size: "+str(len(tef))+"\n")
 tfe = defaultdict(lambda: defaultdict(lambda: float(1)))
+for itr in range(opts.EMITR): 
   sys.stderr.write("itr: "+str(itr)+"\n")
   tfe = e2f(fracorp, engcorp, tfe)
 sys.stderr.write("FRA vocab size: "+str(len(tfe))+"\n")
