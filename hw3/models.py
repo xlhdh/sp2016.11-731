@@ -47,6 +47,8 @@ class LM:
         return ("<s>",)
 
     def score(self, state, word):
+        if state not in self.table: 
+            state = ()
         ngram = state + (word,)
         score = 0.0
         while len(ngram)> 0:
