@@ -14,6 +14,7 @@ parser.add_argument('-s', '--stack-size', dest='s', default=1, type=int, help='M
 parser.add_argument('-n', '--num_sentences', dest='num_sents', default=sys.maxint, type=int, help='Number of sentences to decode (default=no limit)')
 parser.add_argument('-l', '--language-model', dest='lm', default='data/lm', help='File containing ARPA-format language model (default=data/lm)')
 parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', default=False,  help='Verbose mode (default=off)')
+parser.add_argument('-x', '--xnum', dest='x', default=None, type=int, help='num of the sentence to decode')
 opts = parser.parse_args()
 
 tm = models.TM(opts.tm, sys.maxint)
@@ -118,6 +119,9 @@ def stitch(h):
 
 grades = 0.0
 for snum, f in enumerate(input_sents):
+    if opts.x: 
+        if snum != opts.x: 
+            continue 
     # The following code implements a DP monotone decoding
     # algorithm (one that doesn't permute the target phrases).
     # Hence all hypotheses in stacks[i] represent translations of 
@@ -175,6 +179,8 @@ for snum, f in enumerate(input_sents):
     # find best translation by looking at the best scoring hypothesis
     # on the last stack
 
+    if opts.x: 
+        print opts.x, 
     print winner.translation
     grade = grad(f,winner.translation.split())
     sys.stderr.write('%d, TM=%f, LM=%f, total=%f, grade=%f\n' % (snum, winner.tmprob, winner.lmprob, winner.lmprob+winner.tmprob, grade))
