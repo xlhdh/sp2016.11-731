@@ -54,13 +54,13 @@ def grad(f, e):
     for ei, sums in enumerate(chart[:-1]):
         for v in sums:
             for ej, logprob, fi, fj in alignments[ei]:
-                if coverage(range(fi,fj)) & v == 0:
-                    new_v = coverage(range(fi,fj)) | v
+                if coverage(xrange(fi,fj)) & v == 0:
+                    new_v = coverage(xrange(fi,fj)) | v
                     if new_v in chart[ej]:
                         chart[ej][new_v] = logadd(chart[ej][new_v], sums[v]+logprob)
                     else:
                         chart[ej][new_v] = sums[v]+logprob
-    goal = coverage(range(len(f)))  
+    goal = coverage(xrange(len(f)))  
     if goal in chart[len(e)]:
         sent_logprob += chart[len(e)][goal]
         return sent_logprob
@@ -87,6 +87,7 @@ if __name__ == '__main__':
     for sent_num, (f, e) in enumerate(zip(french_sents, english_sents)):
         sent_logprob = grad(f, e)
         if sent_logprob: 
+            sys.stderr.write("%d-%f\n" % (sent_num, sent_logprob))
             total_logprob += sent_logprob
         else:
             sys.stderr.write("ERROR: COULD NOT ALIGN SENTENCE %d\n" % sent_num)
