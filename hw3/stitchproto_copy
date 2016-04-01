@@ -14,6 +14,7 @@ parser.add_argument('-s', '--stack-size', dest='s', default=1, type=int, help='M
 parser.add_argument('-n', '--num_sentences', dest='num_sents', default=sys.maxint, type=int, help='Number of sentences to decode (default=no limit)')
 parser.add_argument('-l', '--language-model', dest='lm', default='data/lm', help='File containing ARPA-format language model (default=data/lm)')
 parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', default=False,  help='Verbose mode (default=off)')
+parser.add_argument('-x', '--xnum', dest='x', default=None, type=int, help='num of the sentence to decode')
 opts = parser.parse_args()
 
 tm = models.TM(opts.tm, sys.maxint)
