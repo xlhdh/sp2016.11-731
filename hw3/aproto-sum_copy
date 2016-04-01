@@ -144,16 +144,14 @@ for snum, f in enumerate(input_sents):
                         lm_state, lm_logprob = lm.score((), p[1])
                         ancprob += lm_logprob
                     if len(p)>2: 
-                        for pword in p[3:]: 
-                            lm_state, lm_logprob = lm.score((), pword)
-                            logprob += lm_logprob
+                        lm_state, lm_logprob = lm.score((), p[2])
+                        logprob += lm_logprob
                     logprob += ancprob
                     states = (tuple(p[:2]), lm_state) # partial LM scores, ending states
                     if phrase.english not in stackses[i][j]: 
                         stackses[i][j][phrase.english] = hyp(phrase.logprob, logprob, states, phrase.english, ancprob)
                     else: 
-                        #tmprob = logadd(phrase.logprob, stackses[i][j][phrase.english].tmprob)
-                        tmprob = max(phrase.logprob, stackses[i][j][phrase.english].tmprob)
+                        tmprob = logadd(phrase.logprob, stackses[i][j][phrase.english].tmprob)
                         stackses[i][j][phrase.english] = hyp(tmprob, logprob, states, phrase.english, ancprob)
 
             for x in xrange(j+1,i): 
@@ -162,14 +160,12 @@ for snum, f in enumerate(input_sents):
                         #print (i, x), (x, j)
                         hyp_ = join_hyp(hi, hj)
                         if hyp_.translation in stackses[i][j]: 
-                            tmprob = max(hyp_.tmprob,stackses[i][j][hyp_.translation].tmprob)
-                            #tmprob = logadd(hyp_.tmprob,stackses[i][j][hyp_.translation].tmprob)
+                            tmprob = logadd(hyp_.tmprob,stackses[i][j][hyp_.translation].tmprob)
                             hyp_ = hyp(tmprob, hyp_.lmprob, hyp_.states, hyp_.translation, hyp_.ancprob)
                         stackses[i][j][hyp_.translation] = hyp_
                         hyp_ = join_hyp(hj, hi)
                         if hyp_.translation in stackses[i][j]: 
-                            tmprob = max(hyp_.tmprob,stackses[i][j][hyp_.translation].tmprob)
-                            #tmprob = logadd(hyp_.tmprob,stackses[i][j][hyp_.translation].tmprob)
+                            tmprob = logadd(hyp_.tmprob,stackses[i][j][hyp_.translation].tmprob)
                             hyp_ = hyp(tmprob, hyp_.lmprob, hyp_.states, hyp_.translation, hyp_.ancprob)
                         stackses[i][j][hyp_.translation] = hyp_
             stackses[i][j] = heapq.nlargest(opts.s, stackses[i][j].itervalues(), key=lambda h: h.tmprob+h.lmprob)
@@ -179,7 +175,6 @@ for snum, f in enumerate(input_sents):
     
     # find best translation by looking at the best scoring hypothesis
     # on the last stack
-
     if opts.x: 
         print opts.x, 
     print winner.translation

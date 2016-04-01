@@ -144,9 +144,8 @@ for snum, f in enumerate(input_sents):
                         lm_state, lm_logprob = lm.score((), p[1])
                         ancprob += lm_logprob
                     if len(p)>2: 
-                        for pword in p[3:]: 
-                            lm_state, lm_logprob = lm.score((), pword)
-                            logprob += lm_logprob
+                        lm_state, lm_logprob = lm.score((), p[2])
+                        logprob += lm_logprob
                     logprob += ancprob
                     states = (tuple(p[:2]), lm_state) # partial LM scores, ending states
                     if phrase.english not in stackses[i][j]: 
