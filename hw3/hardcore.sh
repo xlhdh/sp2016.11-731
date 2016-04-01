@@ -1,8 +1,8 @@
-nohup ./aproto-sum -s 300 -x 2 & 
-nohup ./aproto-sum -s 300 -x 9 & 
-nohup ./aproto-sum -s 300 -x 10 & 
-nohup ./aproto-sum -s 300 -x 19 & 
-nohup ./aproto-sum -s 300 -x 23 & 
-nohup ./aproto-sum -s 300 -x 33 & 
-nohup ./aproto-sum -s 300 -x 39 & 
-nohup ./aproto-sum -s 300 -x 54 & 
+nohup ./$0 -s $1 -x 2 & 
+nohup ./$0 -s $1 -x 9 & 
+nohup ./$0 -s $1 -x 10 & 
+nohup ./$0 -s $1 -x 19 & 
+nohup ./$0 -s $1 -x 24 & 
+nohup ./$0 -s $1 -x 33 & 
+nohup ./$0 -s $1 -x 39 & 
+nohup ./$0 -s $1 -x 54 & 
