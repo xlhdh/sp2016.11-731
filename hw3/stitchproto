@@ -129,6 +129,9 @@ def stitch(h):
 
 grades = 0.0
 for snum, f in enumerate(input_sents):
+    if opts.x: 
+        if snum != opts.x: 
+            continue 
     # The following code implements a DP monotone decoding
     # algorithm (one that doesn't permute the target phrases).
     # Hence all hypotheses in stacks[i] represent translations of 
