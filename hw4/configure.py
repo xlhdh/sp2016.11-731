@@ -13,13 +13,13 @@ def exe():
 	config['seq_len_src'] = 62
 	config['seq_len_tgt'] = 68
 
-	config['embed_src'] = 30
-	config['embed_tgt'] = 30
+	config['embed_src'] = 17
+	config['embed_tgt'] = 23
 
-	config['hidden_src'] = 30
-	config['hidden_tgt'] = 30
+	config['hidden_src'] = 29
+	config['hidden_tgt'] = 31
 
-	config['batch_size'] = 20
+	config['batch_size'] = 1024
 	config['sort_k_batches'] = 40
 
 	config['dropout'] = 0.9

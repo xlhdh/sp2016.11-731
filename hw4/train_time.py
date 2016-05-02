@@ -23,9 +23,18 @@ from blocks.select import Selector
 from blocks.extensions import FinishAfter, Printing
 from blocks.extensions.monitoring import TrainingDataMonitoring
 from blocks.extensions.saveload import Load, Checkpoint
+try:
+	from blocks_extras.extensions.plot import Plot
+	BOKEH_AVAILABLE = True
+except ImportError:
+	BOKEH_AVAILABLE = False
 
 from blocks.algorithms import (GradientDescent, StepClipping, AdaDelta, CompositeRule)
 
+import theano
+#theano.config.compute_test_value = 'warn'
+theano.config.optimizer = 'None'
+theano.config.exception_verbosity = 'high'
 
 import logging
 logging.basicConfig(level=logging.DEBUG)
@@ -34,6 +43,9 @@ logger = logging.getLogger(__name__)
 
 def printchildren(parent, i):
 	print '<....>'*i, parent.name
+	if parent.initialized: 
+		for p in parent.parameters: 
+			print '<....>'*i + '<>', p, p.get_value().shape
 	for child in parent.children: 
 		printchildren(child, i+1)
 
@@ -50,35 +62,47 @@ def main(config):
 	source_sentence_mask = tensor.matrix('source_mask')
 	target_sentence = tensor.lmatrix('target')
 	target_sentence_mask = tensor.matrix('target_mask')
-	source_sentence_smp = tensor.lmatrix('source_smp')
+	source_sentence.tag.test_value = [[13, 20, 0, 20, 0, 20, 0],
+										[1, 4, 8, 4, 8, 4, 8],]
+	source_sentence_mask.tag.test_value = [[0, 1, 0, 1, 0, 1, 0],
+											[1, 0, 1, 0, 1, 0, 1],]
+	target_sentence.tag.test_value = [[0,1,1,5],
+										[2,0,1,0],]
+	target_sentence_mask.tag.test_value = [[0,1,1,0],
+											[1,1,1,0],]
+
 
 	logger.info('Building RNN encoder-decoder')
-	# Encoder 
+	### Building Encoder 
 	embedder = LookupTable(
 		length=len(vocab_src), 
 		dim=config['embed_src'], 
-		weights_init=IsotropicGaussian(0.01),
-		biases_init=Constant(0))
-	embedding = embedder.apply(source_sentence)
+		weights_init=IsotropicGaussian(),
+		biases_init=Constant(0.0), 
+		name='embedder')
+	transformer1 = Linear(
+		config['embed_src'], 
+		config['hidden_src']*4, 
+		weights_init=IsotropicGaussian(),
+		biases_init=Constant(0.0), 
+		name='transformer1')
 	encoder = Bidirectional(
-		GatedRecurrent(
+		LSTM(
 			dim=config['hidden_src'], 
-			activation=Tanh(), 
-			gate_activation=Tanh(),
-			weights_init=Orthogonal(),
-			biases_init=Constant(0)))
-	encoded = encoder.apply(embedding, embedding)
-
-	### Decoder 
+			weights_init=IsotropicGaussian(),
+			biases_init=Constant(0.0)),
+		name='encoderBiLSTM'
+		)
+	
+	### Building Decoder 
 	transition = GatedRecurrent(
 		dim=config['hidden_tgt'], 
-		name='decoder', 
-		weights_init=Orthogonal(),
-		biases_init=Constant(0))
+		weights_init=IsotropicGaussian(),
+		biases_init=Constant(0.0), 
+		name='decoderGRU')
 
-	# defult activation in Tanh
 	attention = SequenceContentAttention( 
-		state_names=transition.apply.states,
+		state_names=transition.apply.states[:1], # default activation is Tanh
 		attended_dim=config['hidden_src']*2,
 		match_dim=config['hidden_tgt'], 
 		name="attention")
@@ -89,7 +113,6 @@ def main(config):
 			attention.take_glimpses.outputs[0]],
 		readout_dim=len(vocab_tgt),
 		emitter = SoftmaxEmitter(
-			initial_output=0,
 			name='emitter'), 
 		feedback_brick = LookupFeedback(
 			num_outputs=len(vocab_tgt), 
@@ -97,10 +120,8 @@ def main(config):
 			name='feedback'), 
 		post_merge=InitializableFeedforwardSequence([
 			Bias(dim=config['hidden_tgt'], 
-				name='maxout_bias').apply,
-			Maxout(num_pieces=2, 
-				name='maxout').apply,
-			Linear(input_dim=config['hidden_tgt'] / 2, 
+				name='softmax_bias').apply,
+			Linear(input_dim=config['hidden_tgt'], 
 				output_dim=config['embed_tgt'],
 				use_bias=False, 
 				name='softmax0').apply,
@@ -112,39 +133,51 @@ def main(config):
 		readout=readout, 
 		transition=transition, 
 		attention=attention, 
-		weights_init=IsotropicGaussian(0.01), biases_init=Constant(0),
-			name="generator",
+		weights_init=IsotropicGaussian(0.01), 
+		biases_init=Constant(0),
+		name="generator",
 		fork=Fork(
 			[name for name in transition.apply.sequences if name != 'mask'], 
 			prototype=Linear()),
 		add_contexts=True)
 
-	#printchildren(sg, 1)
 	#printchildren(encoder, 1)
-
-	generated = sg.generate(
-		n_steps=2*source_sentence_smp.shape[1], 
-		batch_size=source_sentence_smp.shape[0], 
-		attended=encoded, 
-		attended_mask=tensor.ones(source_sentence_smp.shape).T)
-
-	cost = sg.cost(
-		mask = target_sentence_mask.T, 
-		outputs = target_sentence.T, 
-		attended = encoded, 
-		attended_mask = source_sentence_mask)
-
-	logger.info('Creating computational graph')
-	cg = ComputationGraph(cost)
-
-	print cg
-
 	# Initialize model
 	logger.info('Initializing model')
 	embedder.initialize()
+	transformer1.initialize()
 	encoder.initialize()
 	sg.initialize()
 
+	printchildren(sg, 1)
+	
+	# Apply model 
+	embedded = embedder.apply(source_sentence)
+	tansformed1 = transformer1.apply(embedded)
+	encoded = encoder.apply(tansformed1)[0]
+	generated = sg.generate(
+		n_steps=2*source_sentence.shape[1], 
+		#n_steps=2, 
+		batch_size=source_sentence.shape[0], 
+		attended = encoded.dimshuffle(1,0,2), 
+		attended_mask=tensor.ones(source_sentence.shape).T
+		)
+	print generated
+	samples = generated[1]
+	print samples.ndim
+	samples.name = 'samples'
+	samples_cost = generated[4]
+	samples_cost = 'sampling_cost'
+	cost = sg.cost(
+		mask = target_sentence_mask.T, 
+		outputs = target_sentence.T, 
+		attended = encoded.dimshuffle(1,0,2), 
+		attended_mask = source_sentence_mask.T)
+	cost.name = 'target_cost'
+	
+	logger.info('Creating computational graph')
+	cg = ComputationGraph(cost)
+	
 	# apply dropout for regularization
 	if config['dropout'] < 1.0: # dropout is applied to the output of maxout in ghog
 		logger.info('Applying dropout')
@@ -161,6 +194,7 @@ def main(config):
 
 	# Print parameter names
 	enc_dec_param_dict = merge(Selector(embedder).get_parameters(), Selector(encoder).get_parameters(), Selector(sg).get_parameters())
+	enc_dec_param_dict = merge(Selector(sg).get_parameters())
 	logger.info("Parameter names: ")
 	for name, value in enc_dec_param_dict.items():
 		logger.info('	{:15}: {}'.format(value.get_value().shape, name))
@@ -177,8 +211,13 @@ def main(config):
 		FinishAfter(after_n_batches=config['finish_after']),
 		TrainingDataMonitoring([cost], after_batch=True),
 		Printing(after_batch=True),
-		Checkpoint(path=config['saveto'],every_n_batches=config['save_freq'])]
-
+		Checkpoint(
+			path=config['saveto'], 
+			parameters = cg.parameters,
+			save_main_loop=False,
+			every_n_batches=config['save_freq'])]
+	if BOKEH_AVAILABLE: 
+		Plot('Training cost', channels=[['target_cost']], start_server=True, after_batch=True)
 	if config['reload']: 
 		extensions.append(Load(path=cofig['saveto'], 
 			load_iteration_state=False, 
