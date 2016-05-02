@@ -14,6 +14,9 @@ def get_src_stream(configuration, sfiles, svocab_dict):
 	dataset = TextFile(sfiles, svocab_dict, bos_token=None, eos_token=None,\
 		unk_token='<unk>', level='word', preprocess=None, encoding='utf8')
 	stream = DataStream(dataset)
+	stream = Batch(
+        stream, iteration_scheme=ConstantScheme(configuration['batch_size']))
+	stream = Padding(stream)
 	return stream
 
 def get_src_tgt_stream(configuration, sfiles, tfiles, svocab_dict, tvocab_dict):

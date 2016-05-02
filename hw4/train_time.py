@@ -2,7 +2,7 @@ import configure
 from collections import Counter
 from toolz import merge
 
-from util import text_to_dict, InitializableFeedforwardSequence
+from util import text_to_dict, InitializableFeedforwardSequence, Sampler, Plotter
 from stream import get_src_stream, get_src_tgt_stream
 
 from theano import tensor
@@ -21,23 +21,26 @@ from blocks.main_loop import MainLoop
 from blocks.model import Model
 from blocks.select import Selector
 from blocks.extensions import FinishAfter, Printing
-from blocks.extensions.monitoring import TrainingDataMonitoring
+from blocks.extensions.monitoring import TrainingDataMonitoring, DataStreamMonitoring
 from blocks.extensions.saveload import Load, Checkpoint
 try:
 	from blocks_extras.extensions.plot import Plot
 	BOKEH_AVAILABLE = True
 except ImportError:
 	BOKEH_AVAILABLE = False
+BOKEH_AVAILABLE = False
 
 from blocks.algorithms import (GradientDescent, StepClipping, AdaDelta, CompositeRule)
 
+from blocks.monitoring.aggregation import TakeLast, Mean
+
 import theano
 #theano.config.compute_test_value = 'warn'
-theano.config.optimizer = 'None'
+#theano.config.optimizer = 'None'
 theano.config.exception_verbosity = 'high'
 
 import logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
 
 
@@ -51,9 +54,9 @@ def printchildren(parent, i):
 
 
 def main(config): 
-	vocab_src = text_to_dict([config['train_src'],
+	vocab_src, _ = text_to_dict([config['train_src'],
 		config['dev_src'], config['test_src']])
-	vocab_tgt = text_to_dict([config['train_tgt'],
+	vocab_tgt, cabvo = text_to_dict([config['train_tgt'],
 		config['dev_tgt']])
 
 	# Create Theano variables
@@ -164,7 +167,6 @@ def main(config):
 		)
 	print generated
 	samples = generated[1]
-	print samples.ndim
 	samples.name = 'samples'
 	samples_cost = generated[4]
 	samples_cost = 'sampling_cost'
@@ -174,6 +176,8 @@ def main(config):
 		attended = encoded.dimshuffle(1,0,2), 
 		attended_mask = source_sentence_mask.T)
 	cost.name = 'target_cost'
+	cost.tag.aggregation_scheme = TakeLast(cost)
+	model = Model(cost)
 	
 	logger.info('Creating computational graph')
 	cg = ComputationGraph(cost)
@@ -201,23 +205,47 @@ def main(config):
 	logger.info("Total number of parameters: {}".format(len(enc_dec_param_dict)))
 	##########
 
-	# Set up training model
-	logger.info("Building model")
-	training_model = Model(cost)
+	# Training data 
+	train_stream = get_src_tgt_stream(config, 
+		[config['train_src'],], [config['train_tgt'],], 
+		vocab_src, vocab_tgt)
+	dev_stream = get_src_tgt_stream(config,
+		[config['dev_src'],], [config['dev_tgt'],], 
+		vocab_src, vocab_tgt)
+	test_stream = get_src_stream(config,
+		[config['test_src'],], vocab_src)
 
 	# Set extensions
 	logger.info("Initializing extensions")
 	extensions = [
 		FinishAfter(after_n_batches=config['finish_after']),
 		TrainingDataMonitoring([cost], after_batch=True),
+		DataStreamMonitoring(variables=[cost], 
+			data_stream=dev_stream, 
+			prefix="dev", 
+			after_batch=True), 
+		Sampler(
+			model=Model(samples), 
+			data_stream=dev_stream,
+			vocab=cabvo,
+			saveto=config['saveto']+'dev',
+			every_n_batches=config['save_freq']), 
+		Sampler(
+			model=Model(samples), 
+			data_stream=test_stream,
+			vocab=cabvo,
+			saveto=config['saveto']+'test',
+			before_training=True), 
+		Plotter(saveto=config['saveto'], after_batch=True),
 		Printing(after_batch=True),
 		Checkpoint(
 			path=config['saveto'], 
 			parameters = cg.parameters,
 			save_main_loop=False,
-			every_n_batches=config['save_freq'])]
+			every_n_batches=config['save_freq'], 
+			before_training=True)]
 	if BOKEH_AVAILABLE: 
-		Plot('Training cost', channels=[['target_cost']], start_server=True, after_batch=True)
+		Plot('Training cost', channels=[['target_cost']], after_batch=True)
 	if config['reload']: 
 		extensions.append(Load(path=cofig['saveto'], 
 			load_iteration_state=False, 
@@ -246,26 +274,11 @@ def main(config):
 		step_rule=CompositeRule([StepClipping(config['step_clipping']), 
 			eval(config['step_rule'])()])
     )
-	
-
-
-	# Training data 
-	train_stream = get_src_tgt_stream(config, 
-		[config['train_src'],], [config['train_tgt'],], 
-		vocab_src, vocab_tgt)
-	'''for x in train_stream.get_epoch_iterator(): 
-		print x'''
-
-	dev_stream = get_src_tgt_stream(config,
-		[config['dev_src'],], [config['dev_tgt'],], 
-		vocab_src, vocab_tgt)
-	test_stream = get_src_stream(config,
-		[config['test_src'],], vocab_src)
 
 	# Initialize main loop
 	logger.info("Initializing main loop")
 	main_loop = MainLoop(
-		model=training_model,
+		model=model,
 		algorithm=algorithm,
 		data_stream=train_stream,
 		extensions=extensions)

@@ -13,11 +13,11 @@ def exe():
 	config['seq_len_src'] = 62
 	config['seq_len_tgt'] = 68
 
-	config['embed_src'] = 17
-	config['embed_tgt'] = 23
+	config['embed_src'] = 64
+	config['embed_tgt'] = 64
 
-	config['hidden_src'] = 29
-	config['hidden_tgt'] = 31
+	config['hidden_src'] = 128
+	config['hidden_tgt'] = 128
 
 	config['batch_size'] = 1024
 	config['sort_k_batches'] = 40
@@ -31,8 +31,8 @@ def exe():
 
 	config['reload'] = False
 
-	config['finish_after'] = 100000000
-	config['save_freq'] = 100
+	config['finish_after'] = 1000000
+	config['save_freq'] = 50
 
 	config['step_rule'] = 'AdaDelta'
 	config['step_clipping'] = 1.
