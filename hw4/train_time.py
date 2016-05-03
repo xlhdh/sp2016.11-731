@@ -3,7 +3,7 @@ from collections import Counter
 from toolz import merge
 
 from util import text_to_dict, InitializableFeedforwardSequence, Sampler, Plotter
-from stream import get_src_stream, get_src_tgt_stream
+from stream import get_train_stream, get_dev_stream, get_test_stream
 
 from theano import tensor
 from blocks.graph import ComputationGraph, apply_noise, apply_dropout
@@ -30,17 +30,17 @@ except ImportError:
 	BOKEH_AVAILABLE = False
 BOKEH_AVAILABLE = False
 
-from blocks.algorithms import (GradientDescent, StepClipping, AdaDelta, CompositeRule)
+from blocks.algorithms import (GradientDescent, StepClipping, AdaDelta, Adam, CompositeRule)
 
 from blocks.monitoring.aggregation import TakeLast, Mean
 
 import theano
-#theano.config.compute_test_value = 'warn'
-#theano.config.optimizer = 'None'
+theano.config.compute_test_value = 'warn'
+theano.config.optimizer = 'None'
 theano.config.exception_verbosity = 'high'
 
 import logging
-logging.basicConfig(level=logging.ERROR)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -83,24 +83,25 @@ def main(config):
 		weights_init=IsotropicGaussian(),
 		biases_init=Constant(0.0), 
 		name='embedder')
-	transformer1 = Linear(
+	transformer = Linear(
 		config['embed_src'], 
 		config['hidden_src']*4, 
 		weights_init=IsotropicGaussian(),
 		biases_init=Constant(0.0), 
-		name='transformer1')
+		name='transformer')
 	encoder = Bidirectional(
 		LSTM(
 			dim=config['hidden_src'], 
-			weights_init=IsotropicGaussian(),
+			weights_init=IsotropicGaussian(0.01),
 			biases_init=Constant(0.0)),
 		name='encoderBiLSTM'
 		)
+	encoder.prototype.weights_init = Orthogonal()
 	
 	### Building Decoder 
-	transition = GatedRecurrent(
+	transition = LSTM(
 		dim=config['hidden_tgt'], 
-		weights_init=IsotropicGaussian(),
+		weights_init=IsotropicGaussian(0.01),
 		biases_init=Constant(0.0), 
 		name='decoderGRU')
 
@@ -132,7 +133,7 @@ def main(config):
 				name='softmax1').apply]),
 		merged_dim=config['hidden_tgt'])
 
-	sg = SequenceGenerator(
+	decoder = SequenceGenerator(
 		readout=readout, 
 		transition=transition, 
 		attention=attention, 
@@ -143,34 +144,32 @@ def main(config):
 			[name for name in transition.apply.sequences if name != 'mask'], 
 			prototype=Linear()),
 		add_contexts=True)
+	decoder.transition.weights_init = Orthogonal()
 
 	#printchildren(encoder, 1)
 	# Initialize model
 	logger.info('Initializing model')
 	embedder.initialize()
-	transformer1.initialize()
+	transformer.initialize()
 	encoder.initialize()
-	sg.initialize()
-
-	printchildren(sg, 1)
+	decoder.initialize()
 	
 	# Apply model 
 	embedded = embedder.apply(source_sentence)
-	tansformed1 = transformer1.apply(embedded)
+	tansformed1 = transformer.apply(embedded)
 	encoded = encoder.apply(tansformed1)[0]
-	generated = sg.generate(
+	generated = decoder.generate(
 		n_steps=2*source_sentence.shape[1], 
-		#n_steps=2, 
 		batch_size=source_sentence.shape[0], 
 		attended = encoded.dimshuffle(1,0,2), 
 		attended_mask=tensor.ones(source_sentence.shape).T
 		)
-	print generated
+	print 'Generated: ', generated
 	samples = generated[1]
 	samples.name = 'samples'
 	samples_cost = generated[4]
 	samples_cost = 'sampling_cost'
-	cost = sg.cost(
+	cost = decoder.cost(
 		mask = target_sentence_mask.T, 
 		outputs = target_sentence.T, 
 		attended = encoded.dimshuffle(1,0,2), 
@@ -196,30 +195,35 @@ def main(config):
 		logger.info('	{:15}: {}'.format(shape, count))
 	logger.info("Total number of parameters: {}".format(len(shapes)))
 
+	printchildren(embedder, 1)
+	printchildren(transformer, 1)
+	printchildren(encoder, 1)
+	printchildren(decoder, 1)
 	# Print parameter names
-	enc_dec_param_dict = merge(Selector(embedder).get_parameters(), Selector(encoder).get_parameters(), Selector(sg).get_parameters())
-	enc_dec_param_dict = merge(Selector(sg).get_parameters())
-	logger.info("Parameter names: ")
-	for name, value in enc_dec_param_dict.items():
-		logger.info('	{:15}: {}'.format(value.get_value().shape, name))
-	logger.info("Total number of parameters: {}".format(len(enc_dec_param_dict)))
+	# enc_dec_param_dict = merge(Selector(embedder).get_parameters(), Selector(encoder).get_parameters(), Selector(decoder).get_parameters())
+	# enc_dec_param_dict = merge(Selector(decoder).get_parameters())
+	# logger.info("Parameter names: ")
+	# for name, value in enc_dec_param_dict.items():
+	# 	logger.info('	{:15}: {}'.format(value.get_value().shape, name))
+	# logger.info("Total number of parameters: {}".format(len(enc_dec_param_dict)))
 	##########
 
 	# Training data 
-	train_stream = get_src_tgt_stream(config, 
+	train_stream = get_train_stream(config, 
 		[config['train_src'],], [config['train_tgt'],], 
 		vocab_src, vocab_tgt)
-	dev_stream = get_src_tgt_stream(config,
+	dev_stream = get_dev_stream(
 		[config['dev_src'],], [config['dev_tgt'],], 
 		vocab_src, vocab_tgt)
-	test_stream = get_src_stream(config,
-		[config['test_src'],], vocab_src)
+	test_stream = get_test_stream([config['test_src'],], vocab_src)
 
 	# Set extensions
 	logger.info("Initializing extensions")
 	extensions = [
 		FinishAfter(after_n_batches=config['finish_after']),
-		TrainingDataMonitoring([cost], after_batch=True),
+		TrainingDataMonitoring([cost], 
+			prefix="tra", 
+			after_batch=True),
 		DataStreamMonitoring(variables=[cost], 
 			data_stream=dev_stream, 
 			prefix="dev", 
@@ -235,6 +239,7 @@ def main(config):
 			data_stream=test_stream,
 			vocab=cabvo,
 			saveto=config['saveto']+'test',
+			on_resumption=True,
 			before_training=True), 
 		Plotter(saveto=config['saveto'], after_batch=True),
 		Printing(after_batch=True),
@@ -242,30 +247,16 @@ def main(config):
 			path=config['saveto'], 
 			parameters = cg.parameters,
 			save_main_loop=False,
-			every_n_batches=config['save_freq'], 
-			before_training=True)]
+			every_n_batches=config['save_freq'])]
 	if BOKEH_AVAILABLE: 
 		Plot('Training cost', channels=[['target_cost']], after_batch=True)
 	if config['reload']: 
-		extensions.append(Load(path=cofig['saveto'], 
+		extensions.append(Load(path=config['saveto'], 
 			load_iteration_state=False, 
 			load_log=False))
-
-	# Sampling from train and dev 
-	'''
-	logger.info("Building sampling model")
-	embedding_smp = embedder.apply(source_sentence_smp)
-	encoded_smp = encoder.apply(embedding_smp, embedding_smp)
-	generated_smp = sg.generate(
-		n_steps=2*source_sentence_smp.shape[1], 
-		batch_size=source_sentence_smp.shape[0], 
-		attended=encoded_smp, 
-		attended_mask=tensor.ones(source_sentence_smp.shape).T)
-	search_model = Model(generated)
-	search_model_smp = Model(generated_smp)
-	_, samples_tra = VariableFilter(bricks=[sg], name="outputs")(ComputationGraph(generated[1])) 
-	_, samples_dev = VariableFilter(bricks=[sg], name="outputs")(ComputationGraph(generated_smp[1])) 
-	'''
+	else: 
+		with open(config['saveto']+'.txt', 'w') as f: 
+			pass 
 
 	# Set up training algorithm
 	logger.info("Initializing training algorithm")

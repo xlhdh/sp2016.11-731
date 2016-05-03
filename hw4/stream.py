@@ -10,16 +10,16 @@ def _length(sentence_pair):
     """Assumes target is the last element in the tuple."""
     return len(sentence_pair[-1])
 
-def get_src_stream(configuration, sfiles, svocab_dict): 
+def get_test_stream(sfiles, svocab_dict): 
 	dataset = TextFile(sfiles, svocab_dict, bos_token=None, eos_token=None,\
 		unk_token='<unk>', level='word', preprocess=None, encoding='utf8')
-	stream = DataStream(dataset)
+	stream = Merge([dataset.get_example_stream(),], ('source', ))
 	stream = Batch(
-        stream, iteration_scheme=ConstantScheme(configuration['batch_size']))
+        stream, iteration_scheme=ConstantScheme(10))
 	stream = Padding(stream)
 	return stream
 
-def get_src_tgt_stream(configuration, sfiles, tfiles, svocab_dict, tvocab_dict):
+def get_train_stream(configuration, sfiles, tfiles, svocab_dict, tvocab_dict):
 
 	s_dataset = TextFile(sfiles, svocab_dict, bos_token=None, eos_token=None,\
 		unk_token='<unk>', level='word', preprocess=None, encoding='utf8')
@@ -43,6 +43,26 @@ def get_src_tgt_stream(configuration, sfiles, tfiles, svocab_dict, tvocab_dict):
 	stream = Batch(
         stream, iteration_scheme=ConstantScheme(configuration['batch_size']))
 
+	# Pad 
+	# Note that </s>=0. Fuel only allows padding 0 by default 
+	masked_stream = Padding(stream)
+
+	return masked_stream
+
+def get_dev_stream(sfiles, tfiles, svocab_dict, tvocab_dict):
+
+	s_dataset = TextFile(sfiles, svocab_dict, bos_token=None, eos_token=None,\
+		unk_token='<unk>', level='word', preprocess=None, encoding='utf8')
+	t_dataset = TextFile(tfiles, tvocab_dict, bos_token=None, eos_token=None,\
+		unk_token='<unk>', level='word', preprocess=None, encoding='utf8')
+
+	# Merge 
+	stream = Merge([s_dataset.get_example_stream(),
+                    t_dataset.get_example_stream()],
+                   ('source', 'target'))
+	# Batch - Sort 
+	stream = Batch(stream, 
+		iteration_scheme=ConstantScheme(1006))
 	# Pad 
 	# Note that </s>=0. Fuel only allows padding 0 by default 
 	masked_stream = Padding(stream)

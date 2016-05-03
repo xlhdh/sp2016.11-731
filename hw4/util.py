@@ -45,7 +45,7 @@ class Sampler(SimpleExtension):
 		fo = open(self.saveto+'.txt', 'w')
 		for batch in self.data_stream.get_epoch_iterator(): 
 			inputs = batch[0]
-			outputs = self.sampling_fn(inputs)[0]
+			outputs = self.sampling_fn(inputs)[0].T
 			for i in xrange(outputs.shape[0]): 
 				eside = outputs[i]
 				s =  u''.join([self.vocab[j]+u' ' for j in eside])+'\n'
@@ -58,7 +58,7 @@ class Plotter(SimpleExtension):
 
 	def do(self, which_callback, *args):
 		fo = open(self.saveto+'.txt', 'a')
-		log = self.main_loop.log
-		for key, value in log.current_row.items():
-			fo.write(str(value)+' ')
-		fo.write('\n')
+		log = self.main_loop.log.current_row
+		fo.write(str(log['tra_target_cost'])+' '+str(log['dev_target_cost'])+'\n')
+
+		

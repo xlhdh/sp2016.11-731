@@ -13,18 +13,19 @@ def exe():
 	config['seq_len_src'] = 62
 	config['seq_len_tgt'] = 68
 
-	config['embed_src'] = 64
-	config['embed_tgt'] = 64
+	config['embed_src'] = 16
+	config['embed_tgt'] = 16
 
-	config['hidden_src'] = 128
-	config['hidden_tgt'] = 128
+	config['hidden_src'] = 16
+	config['hidden_tgt'] = 16
 
 	config['batch_size'] = 1024
 	config['sort_k_batches'] = 40
 
 	config['dropout'] = 0.9
 
-	config['saveto'] = 'try'+str(config['embed_src'])+'_' \
+	config['saveto'] = 'try' \
+		+str(config['embed_src'])+'_' \
 		+str(config['embed_tgt'])+'_' \
 		+str(config['hidden_src'])+'_' \
 		+str(config['hidden_tgt'])
@@ -34,7 +35,7 @@ def exe():
 	config['finish_after'] = 1000000
 	config['save_freq'] = 50
 
-	config['step_rule'] = 'AdaDelta'
+	config['step_rule'] = 'Adam'
 	config['step_clipping'] = 1.
 
 
