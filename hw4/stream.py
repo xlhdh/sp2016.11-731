@@ -10,6 +10,15 @@ def _length(sentence_pair):
     """Assumes target is the last element in the tuple."""
     return len(sentence_pair[-1])
 
+class _too_long(object):
+    """Filters sequences longer than given sequence length."""
+    def __init__(self, seq_len):
+        self.seq_len = seq_len
+
+    def __call__(self, sentence_pair):
+        return all([len(sentence) <= self.seq_len
+                    for sentence in sentence_pair])
+
 def get_test_stream(sfiles, svocab_dict): 
 	dataset = TextFile(sfiles, svocab_dict, bos_token=None, eos_token=None,\
 		unk_token='<unk>', level='word', preprocess=None, encoding='utf8')
@@ -31,6 +40,7 @@ def get_train_stream(configuration, sfiles, tfiles, svocab_dict, tvocab_dict):
                     t_dataset.get_example_stream()],
                    ('source', 'target'))
 	# Filter -- TODO 
+	stream = Filter(stream, predicate=_too_long(seq_len=configuration['seq_len']))
 
 	# Map - no need 
 

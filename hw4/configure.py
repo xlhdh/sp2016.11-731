@@ -10,8 +10,7 @@ def exe():
 	config['dev_tgt'] = config['datadir'] + 'dev.tgt'
 
 	# MAX Length: src = 61, tgt = 67
-	config['seq_len_src'] = 62
-	config['seq_len_tgt'] = 68
+	config['seq_len'] = 20
 
 	config['embed_src'] = 16
 	config['embed_tgt'] = 16
@@ -19,7 +18,7 @@ def exe():
 	config['hidden_src'] = 16
 	config['hidden_tgt'] = 16
 
-	config['batch_size'] = 1024
+	config['batch_size'] = 80
 	config['sort_k_batches'] = 40
 
 	config['dropout'] = 0.9

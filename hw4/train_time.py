@@ -1,15 +1,20 @@
 import configure
 from collections import Counter
 from toolz import merge
-
-from util import text_to_dict, InitializableFeedforwardSequence, Sampler, Plotter
+import numpy as np
+# Adapted from: 
+# https://github.com/mila-udem/blocks-examples/blob/master/machine_translation/__init__.py
+# and 
+# https://github.com/mila-udem/blocks-examples/blob/master/machine_translation/model.py
+# Added forget gate initialization, LSTM support and sequence length induction
+from util import text_to_dict, InitializableFeedforwardSequence, Sampler, Plotter, LSTM2GO
 from stream import get_train_stream, get_dev_stream, get_test_stream
 
 from theano import tensor
 from blocks.graph import ComputationGraph, apply_noise, apply_dropout
 from blocks.initialization import IsotropicGaussian, Orthogonal, Constant
 
-from blocks.bricks.recurrent import GatedRecurrent, LSTM, Bidirectional
+from blocks.bricks.recurrent import LSTM, Bidirectional
 from blocks.bricks.attention import SequenceContentAttention
 from blocks.bricks.sequence_generators import (
 	SequenceGenerator, Readout, SoftmaxEmitter, LookupFeedback)
@@ -20,7 +25,7 @@ from blocks.bricks import Tanh, Bias, Linear, Maxout
 from blocks.main_loop import MainLoop
 from blocks.model import Model
 from blocks.select import Selector
-from blocks.extensions import FinishAfter, Printing
+from blocks.extensions import FinishAfter, Printing, ProgressBar
 from blocks.extensions.monitoring import TrainingDataMonitoring, DataStreamMonitoring
 from blocks.extensions.saveload import Load, Checkpoint
 try:
@@ -34,13 +39,8 @@ from blocks.algorithms import (GradientDescent, StepClipping, AdaDelta, Adam, Co
 
 from blocks.monitoring.aggregation import TakeLast, Mean
 
-import theano
-theano.config.compute_test_value = 'warn'
-theano.config.optimizer = 'None'
-theano.config.exception_verbosity = 'high'
-
 import logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
 
 
@@ -89,24 +89,29 @@ def main(config):
 		weights_init=IsotropicGaussian(),
 		biases_init=Constant(0.0), 
 		name='transformer')
+
+	lstminit = np.asarray([0.0,]*config['hidden_src']+[0.0,]*config['hidden_src']+[1.0,]*config['hidden_src']+[0.0,]*config['hidden_src'])
 	encoder = Bidirectional(
 		LSTM(
 			dim=config['hidden_src'], 
 			weights_init=IsotropicGaussian(0.01),
-			biases_init=Constant(0.0)),
+			biases_init=Constant(lstminit)),
 		name='encoderBiLSTM'
 		)
 	encoder.prototype.weights_init = Orthogonal()
 	
 	### Building Decoder 
-	transition = LSTM(
+	lstminit = np.asarray([0.0,]*config['hidden_tgt']+[0.0,]*config['hidden_tgt']+[1.0,]*config['hidden_tgt']+[0.0,]*config['hidden_tgt'])
+	transition = LSTM2GO(
+		attended_dim=config['hidden_tgt'], 
 		dim=config['hidden_tgt'], 
 		weights_init=IsotropicGaussian(0.01),
-		biases_init=Constant(0.0), 
-		name='decoderGRU')
+		biases_init=Constant(lstminit), 
+		name='decoderLSTM')
 
 	attention = SequenceContentAttention( 
-		state_names=transition.apply.states[:1], # default activation is Tanh
+		state_names=transition.apply.states, # default activation is Tanh
+		state_dims=[config['hidden_tgt']],
 		attended_dim=config['hidden_src']*2,
 		match_dim=config['hidden_tgt'], 
 		name="attention")
@@ -156,8 +161,8 @@ def main(config):
 	
 	# Apply model 
 	embedded = embedder.apply(source_sentence)
-	tansformed1 = transformer.apply(embedded)
-	encoded = encoder.apply(tansformed1)[0]
+	tansformed = transformer.apply(embedded)
+	encoded = encoder.apply(tansformed)[0]
 	generated = decoder.generate(
 		n_steps=2*source_sentence.shape[1], 
 		batch_size=source_sentence.shape[0], 
@@ -165,9 +170,12 @@ def main(config):
 		attended_mask=tensor.ones(source_sentence.shape).T
 		)
 	print 'Generated: ', generated
-	samples = generated[1]
+	# generator_generate_outputs
+	#samples = generated[1] # For GRU 
+	samples = generated[2] # For LSTM
 	samples.name = 'samples'
-	samples_cost = generated[4]
+	#samples_cost = generated[4] # For GRU 
+	samples_cost = generated[5] # For LSTM
 	samples_cost = 'sampling_cost'
 	cost = decoder.cost(
 		mask = target_sentence_mask.T, 
@@ -221,6 +229,7 @@ def main(config):
 	logger.info("Initializing extensions")
 	extensions = [
 		FinishAfter(after_n_batches=config['finish_after']),
+		ProgressBar(),
 		TrainingDataMonitoring([cost], 
 			prefix="tra", 
 			after_batch=True),
@@ -239,6 +248,7 @@ def main(config):
 			data_stream=test_stream,
 			vocab=cabvo,
 			saveto=config['saveto']+'test',
+			after_n_batches=1, 
 			on_resumption=True,
 			before_training=True), 
 		Plotter(saveto=config['saveto'], after_batch=True),
