@@ -1,3 +1,11 @@
+LSTM encoder - decoder with word embedding layer on both sides, and 1 layer LSTM on both sides. 
+Tried: 
+- various embedding and hidden layer sizes 
+- various batch sizes 
+- gradually increasing sequence length 
+- initializing forget gates bias with 1.0 
+Nothing worked (or to be precise, they all worked, just not enough to make this a decent translator). Final result is from  embedding size 128, hidden layer 512, and batch size 32. 
+
 There are two Python programs here:
 
  - `python bleu.py your-output.txt ref.txt` to compute the BLEU score of your output against the reference translation.
